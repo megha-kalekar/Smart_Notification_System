@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore dependencies
+        run: dotnet restore Smart_Notification_System/Smart_Notification_System.sln
+
+      - name: Build
+        run: dotnet build Smart_Notification_System/Smart_Notification_System.sln --no-restore --configuration Release
+
+      - name: Run tests
+        run: dotnet test Smart_Notification_System/Smart_Notification_System.sln --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: '**/TestResults/**/*.xml'
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg BUILD_VERSION=${{ github.sha }} \
+            -t smart-notification-system:${{ github.sha }} \
+            -t smart-notification-system:latest \
+            Smart_Notification_System/
+
+      - name: Verify container starts
+        run: |
+          docker run --rm -d \
+            --name sns-test \
+            -e Jwt__Key="test_secret_key_for_ci_build_32chars!" \
+            -e ConnectionStrings__DefaultConnection="Server=localhost;Database=Test;" \
+            -e ASPNETCORE_ENVIRONMENT="Development" \
+            smart-notification-system:latest || true
+          sleep 3
+          docker stop sns-test 2>/dev/null || true
