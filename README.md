@@ -2,7 +2,6 @@
 
 A **production-ready REST API** built with **ASP.NET Core 8** that manages and delivers notifications through multiple channels (Email, SMS, Push, Webhook) with real-time updates via SignalR.
 
-> Built as a portfolio project demonstrating enterprise-level .NET architecture for the German job market.
 
 ---
 
